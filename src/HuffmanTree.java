@@ -1,4 +1,9 @@
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class HuffmanTree {
     private HuffmanNode root;
@@ -12,8 +17,10 @@ public class HuffmanTree {
         public HuffmanNode(String symbol, Double frequency) {
             this.symbols = symbol;
             this.frequency = frequency;
-            this.left = this.right = null;
+            this.left = null;
+            this.right = null;
         }
+
         // Internal-node constructor
         public HuffmanNode(HuffmanNode left, HuffmanNode right) {
             this.symbols = left.symbols + right.symbols;
@@ -21,44 +28,29 @@ public class HuffmanTree {
             this.left = left;
             this.right = right;
         }
-        // Order by frequency, tie-break by lexicographic on symbols
+
         @Override
         public int compareTo(HuffmanNode o) {
             int cmp = this.frequency.compareTo(o.frequency);
-            return (cmp != 0) ? cmp : this.symbols.compareTo(o.symbols);
-        }
-        @Override
-        public String toString() {
-            return "<" + symbols + ", " + frequency + ">";
+            if (cmp != 0) return cmp;
+            return this.symbols.compareTo(o.symbols);
         }
     }
 
-    // Build from root node
-    public HuffmanTree(HuffmanNode root) {
-        this.root = root;
-    }
-
-    /**
-     * Turn the flat legend string into a min-heap of HuffmanNodes.
-     * E.g. "A 20 E 24 G 3 …" ⇒ [HuffmanNode("A",20), …]
-     */
-    public static BinaryHeap<HuffmanNode> freqToHeap(String legend) {
-        String[] tokens = legend.trim().split("\\s+");
-        // tokens: [symbol, freq, symbol, freq, …]
-        HuffmanNode[] nodes = new HuffmanNode[tokens.length/2];
+    // Build a heap of HuffmanNodes from "symbol freq symbol freq ..." text
+    public static BinaryHeap<HuffmanNode> freqToHeap(String frequencyStr) {
+        String[] tokens = frequencyStr.trim().split("\\s+");
+        HuffmanNode[] nodes = new HuffmanNode[tokens.length / 2];
         int idx = 0;
         for (int i = 0; i < tokens.length; i += 2) {
             String sym = tokens[i];
-            Double freq = Double.valueOf(tokens[i+1]);
+            Double freq = Double.valueOf(tokens[i + 1]);
             nodes[idx++] = new HuffmanNode(sym, freq);
         }
         return new BinaryHeap<>(nodes);
     }
 
-    /**
-     * Classic Huffman build: keep extracting two smallest,
-     * combine into new node, re-insert, until one remains.
-     */
+    // Standard Huffman build
     public static HuffmanTree createFromHeap(BinaryHeap<HuffmanNode> heap) {
         while (heap.getSize() > 1) {
             HuffmanNode a = heap.extractMin();
@@ -68,56 +60,61 @@ public class HuffmanTree {
         return new HuffmanTree(heap.extractMin());
     }
 
-    /**
-     * Print each symbol and its bit-string, one per line,
-     * in a preorder traversal: left=0 then right=1.
-     */
     public void printLegend() {
-        traverseLegend(root, "");
-    }
-    private void traverseLegend(HuffmanNode node, String bits) {
-        if (node.left == null && node.right == null) {
-            System.out.println(convertSymbolToChar(node.symbols) + "\t" + bits);
-        } else {
-            traverseLegend(node.left, bits + "0");
-            traverseLegend(node.right, bits + "1");
+        Map<String,String> map = new HashMap<>();
+        buildLegend(root, "", map);
+        List<Map.Entry<String,String>> entries = new ArrayList<>(map.entrySet());
+        entries.sort(Comparator.comparing(Map.Entry::getValue));
+        for (Map.Entry<String,String> e : entries) {
+            System.out.println(convertSymbolToChar(e.getKey()) + "\t" + e.getValue());
         }
     }
 
-    /**
-     * Print the post-order spec: at each leaf emit symbol,
-     * at each internal node emit '|' unless it’s on the
-     * far-right spine (those trailing pipes are implied).
-     */
+    private void buildLegend(HuffmanNode node, String bits, Map<String,String> map) {
+        if (node.left == null && node.right == null) {
+            map.put(node.symbols, bits);
+        } else {
+            buildLegend(node.left,  bits + "1", map);
+            buildLegend(node.right, bits + "0", map);
+        }
+    }
+
     public void printTreeSpec() {
         traverseSpec(root, true);
         System.out.println();
     }
-    private void traverseSpec(HuffmanNode node, boolean isRightmost) {
+
+    private void traverseSpec(HuffmanNode node, boolean isLeftmost) {
         if (node.left == null && node.right == null) {
             System.out.print(convertSymbolToChar(node.symbols));
         } else {
-            traverseSpec(node.left, false);
-            traverseSpec(node.right, isRightmost);
-            if (!isRightmost) {
+            traverseSpec(node.right, false);
+            traverseSpec(node.left, isLeftmost);
+            if (!isLeftmost) {
                 System.out.print("|");
             }
         }
     }
 
+    // Convert token back to actual character
     public static String convertSymbolToChar(String symbol) {
         if (symbol.equals("space")) return " ";
         if (symbol.equals("eom"))   return "\\e";
         if (symbol.equals("|"))     return "\\|";
-        if (symbol.equals("\\"))    return "\\\\";
+        if (symbol.equals("\\"))   return "\\\\";
         return symbol;
+    }
+
+    public HuffmanTree(HuffmanNode root) {
+        this.root = root;
     }
 
     public static void main(String[] args) throws IOException {
         String mode = (args.length == 0) ? "spec" : args[0].toLowerCase();
-        String freqStr = StdinToString.read();
-        BinaryHeap<HuffmanNode> heap = freqToHeap(freqStr);
+        String frequencyStr = StdinToString.read();
+        BinaryHeap<HuffmanNode> heap = freqToHeap(frequencyStr);
         HuffmanTree tree = createFromHeap(heap);
+
         if (mode.equals("legend")) {
             tree.printLegend();
         } else {
